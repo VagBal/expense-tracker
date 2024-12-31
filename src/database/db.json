@@ -1,0 +1,99 @@
+{
+    "name": "Expense Tracker Database",
+    "monthly_budgets": [
+        {
+            "id": 1,
+            "name": "January",
+            "budget": 100
+        },
+        {
+            "id": 2,
+            "name": "February",
+            "budget": 100
+        },
+        {
+            "id": 3,
+            "name": "March",
+            "budget": 100
+        },
+        {
+            "id": 4,
+            "name": "April",
+            "budget": 100
+        },
+        {
+            "id": 5,
+            "name": "May",
+            "budget": 100
+        },
+        {
+            "id": 6,
+            "name": "June",
+            "budget": 100
+        },
+        {
+            "id": 7,
+            "name": "July",
+            "budget": 100
+        },
+        {
+            "id": 8,
+            "name": "August",
+            "budget": 100
+        },
+        {
+            "id": 9,
+            "name": "September",
+            "budget": 100
+        },
+        {
+            "id": 10,
+            "name": "October",
+            "budget": 100
+        },
+        {
+            "id": 11,
+            "name": "November",
+            "budget": 100
+        },
+        {
+            "id": 12,
+            "name": "December",
+            "budget": 100
+        }
+    ],
+    "expenses": [
+        {
+            "id": 1,
+            "description": "Breakfast",
+            "amount": 20,
+            "category": "Eat",
+            "created_at": "2024-12-31 11:16:42.194293",
+            "month": 12
+        },
+        {
+            "id": 2,
+            "description": "Lunch",
+            "amount": 40,
+            "category": "Eat",
+            "created_at": "2024-12-31 11:16:50.721406",
+            "month": 12
+        },
+        {
+            "id": 4,
+            "description": "Biner",
+            "amount": 2,
+            "category": "Eat",
+            "created_at": "2024-12-31 11:57:47.280434",
+            "month": 12
+        },
+        {
+            "id": 5,
+            "description": "Biner",
+            "amount": 8,
+            "category": "Eat",
+            "created_at": "2024-12-31 11:58:16.560940",
+            "month": 12
+        }
+    ]
+}
