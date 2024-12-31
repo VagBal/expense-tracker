@@ -32,7 +32,6 @@ class Parser:
             "--update-amount",
             nargs=2,
             metavar=("ID", "NEW_AMOUNT"),
-            type=float,
             help="Update an expense record's amount"
         )
         action_group.add_argument(
@@ -90,11 +89,20 @@ class Parser:
         )
     
     def parse_args(self):
+        """
+        Parse command line arguments and handle errors gracefully.
+
+        Returns:
+            argparse.Namespace: Parsed arguments.
+        """
         try:
             args = self.parser.parse_args()
             if args.add:
-                # Convert amount to float
-                args.add[1] = float(args.add[1])
+                # Validate and convert amount to float
+                try:
+                    args.add[1] = float(args.add[1])
+                except ValueError:
+                    self.parser.error("Amount must be a valid number.")
             return args
         except ValueError as e:
             self.parser.error(f"Invalid argument value: {e}")

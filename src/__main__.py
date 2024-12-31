@@ -23,36 +23,36 @@ def main():
                 amount = float(amount)
             except ValueError:
                 raise ValueError(f"Invalid amount: {amount}. Must be a number.")
-            db.add_an_expense(str(description), amount, str(category))
+            db.add_an_expense(description, amount, category)
             
         elif args.delete:
             db.delete_an_expense(args.delete)  # Type conversion handled by argparse
             
         elif args.update_description:
             expense_id, new_description = args.update_description
-            db.update_an_expense_description(expense_id, str(new_description))
+            db.update_an_expense_description(int(expense_id), new_description)
             
         elif args.update_amount:
             expense_id, new_amount = args.update_amount
-            db.update_an_expense_amount(expense_id, new_amount)  # Type conversion handled by argparse
+            db.update_an_expense_amount(int(expense_id), float(new_amount))
             
         elif args.update_category:
             expense_id, new_category = args.update_category
-            db.update_an_expense_category(expense_id, str(new_category))
+            db.update_an_expense_category(int(expense_id), new_category)
             
         elif args.find:
-            db.find_expense_by_id(args.find)  # Type conversion handled by argparse
+            db.find_expense_by_id(args.find, "print")
             
         elif args.list_all:
             db.list_expenses()
             
         elif args.list_by_category:
-            category = args.list_by_category
-            db.list_expenses(category)
+            category_args = args.list_by_category
+            db.list_expenses("category", category_args)
             
         elif args.list_by_month:
-            month = args.list_by_month
-            db.list_expenses(month)
+            month_args = args.list_by_month
+            db.list_expenses("month", month_args)
             
         elif args.summary_all:
             db.summary_expenses()
@@ -63,7 +63,7 @@ def main():
             
         elif args.summary_by_month:
             month = args.summary_by_month
-            db.summary_expenses(month)
+            db.summary_expenses(month, "month")
             
         elif args.export_csv:
             db.export_expenses("csv")

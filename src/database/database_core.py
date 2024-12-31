@@ -5,199 +5,202 @@ import datetime
 import json
 import csv
 from prettytable import PrettyTable
+import threading
 
 class States(Enum):
-    INVACTIVE = 0
+    INACTIVE = 0
     ACTIVE = 1
 
 class Database:
-    _state = None
-    _database = None
-    _id = int()
-    _database_maker = None
-    _instance = None
+    _lock = threading.Lock()
+    state = None
+    database = None
+    id = 0
+    database_maker = None
+    instance = None
 
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(Database, cls).__new__(cls)
-            cls._instance.init_database()
-        return cls._instance
+        if cls.instance is None:
+            with cls._lock:
+                if cls.instance is None:  # Double-checked locking
+                    cls.instance = super(Database, cls).__new__(cls)
+                    cls.instance.init_database()
+        return cls.instance
     
     def init_database(self):
-        self._state = States.ACTIVE
-        self._database_maker = DatabaseMaker()
-        if self._database_maker.is_db_file_exists() is False:
-            self._database_maker.make_a_new_db()
-
+        self.state = States.ACTIVE
+        self.database_maker = DatabaseMaker()
+        if not self.database_maker.is_db_file_exists():
+            self.database_maker.make_a_new_db()
         self.load_db_from_file(DB_FILE_PATH)
-        self._id = self.get_last_id()
+        self.id = self.get_last_id()
     
     def get_last_id(self):
         """Get the last used ID from the database."""
-        if self._database["expenses"]:
-            return max(expense["id"] for expense in self._database["expenses"])
+        if self.database["expenses"]:
+            return max(expense["id"] for expense in self.database["expenses"])
         return 0
 
     def get_state(self):
-        return self._state
+        return self.state
     
     def load_db_from_file(self, file_path):
-        with open(file_path, mode='r', encoding="utf-8") as read_file:
-            self._database = json.load(read_file)
+        try:
+            with open(file_path, mode='r', encoding="utf-8") as read_file:
+                self.database = json.load(read_file)
+        except Exception as e:
+            print(f"An error occurred while loading the database: {e}")
 
-    def add_an_expense(self, description: str, amount: int, category: str):
-        self._id += 1
-        month = int(datetime.datetime.now().month)
-        expense = Expense(int(self._id), description, int(amount), category, str(datetime.datetime.now()), month)
-        expense_dict = expense.as_dict()
-        self._database["expenses"].append(expense_dict)
-        self._database_maker.update_an_existing_db(self._database)
-        print(f"A new expense has been added with ID:{self._id}")
+    def add_an_expense(self, description: str, amount: float, category: str):
+        with self._lock:
+            self.id += 1
+            expense = Expense(
+                id=self.id, 
+                description=description, 
+                amount=amount, 
+                category=category, 
+                created_at=datetime.datetime.now().isoformat()
+            )
+            expense_dict = expense.as_dict()
+            self.database["expenses"].append(expense_dict)
+            self.database_maker.update_an_existing_db(self.database)
+            print(f"A new expense has been added with ID:{self.id}")
 
-        monthly_budget = 0
-        for months in self._database["monthly_budgets"]:
-            if months["id"] == month:
-                monthly_budget = months["budget"]
+        current_month = datetime.datetime.now().month
+        monthly_budget = next((budget["budget"] for budget in self.database["monthly_budgets"] if budget["id"] == current_month), 0)
+        current_budget = sum(expense["amount"] for expense in self.database["expenses"] if expense["month"] == current_month)
 
-        current_budget = 0
-        for expense in self._database["expenses"]:
-            if expense["month"] == month:
-                current_budget += expense["amount"]
-        
         if current_budget > monthly_budget:
-            print(f"The current budget: {current_budget} is exceeded the monthly budget: {monthly_budget} for this month: {self.get_month_name_by_id(month)}")
-        
+            print(f"The current budget: {current_budget} exceeds the monthly budget: {monthly_budget} for this month: {self.get_month_name_by_id(current_month)}")
+
     def get_month_name_by_id(self, month_id):
-        for month in  self._database["monthly_budgets"]:
-            if month["id"] == month_id:
-                return month["name"]
+        return next((month["name"] for month in self.database["monthly_budgets"] if month["id"] == month_id), "Unknown")
 
     def delete_an_expense(self, id: int):
         try:
-            self._database["expenses"] = [expense for expense in self._database["expenses"] if expense["id"] != id]
-            self._database_maker.update_an_existing_db(self._database)
-            print(f"The expense with ID:{id} has been deleted")
+            with self._lock:
+                self.database["expenses"] = [expense for expense in self.database["expenses"] if expense["id"] != id]
+                self.database_maker.update_an_existing_db(self.database)
+                print(f"The expense with ID:{id} has been deleted")
         except Exception as e:
-            print(f"An error occurred: {e} with the expense with id: {id} deletion")
+            print(f"An error occurred: {e} while deleting the expense with id: {id}")
 
-    def update_an_expense_amount(self, id: int, amount: int):
+    def update_an_expense_amount(self, id: int, amount: float):
         try: 
-            expense = self.find_task_by_id(id)
-            expense["amount"] = amount
-            print(f"The expense's amount with ID:{id} has been updated")
+            with self._lock:
+                expense = self.find_expense_by_id(id)
+                expense["amount"] = amount
+                print(f"The expense's amount with ID:{id} has been updated to {amount}")
+                self.database_maker.update_an_existing_db(self.database)
         except ValueError as e: 
             print(e)
 
-        self._database_maker.update_an_existing_db(self._database)
-    
     def update_an_expense_description(self, id: int, description: str):
         try: 
-            expense = self.find_task_by_id(id)
-            expense["description"] = description
-            print(f"The expense's description with ID:{id} has been updated")
+            with self._lock:
+                expense = self.find_expense_by_id(id)
+                expense["description"] = description
+                print(f"The expense's description with ID:{id} has been updated to {description}")
+                self.database_maker.update_an_existing_db(self.database)
         except ValueError as e: 
             print(e)
-
-        self._database_maker.update_an_existing_db(self._database)
 
     def update_an_expense_category(self, id: int, category: str):
         try: 
-            expense = self.find_task_by_id(id)
-            expense["category"] = category
-            print(f"The expense's category with ID:{id} has been updated")
+            with self._lock:
+                expense = self.find_expense_by_id(id)
+                expense["category"] = category
+                print(f"The expense's category with ID:{id} has been updated to {category}")
+                self.database_maker.update_an_existing_db(self.database)
         except ValueError as e: 
             print(e)
 
-        self._database_maker.update_an_existing_db(self._database)
-
-    def find_expense_by_id(self, id: int):
-        for expense in self._database["expenses"]:
-            if expense["id"] == id:
-                self.tablify(expense)
+    def find_expense_by_id(self, id: int, type="no_print"):
+        expense = next((expense for expense in self.database["expenses"] if expense["id"] == id), None)
+        if expense:
+            if type == "print":
+                self.tablify([expense])
+            return expense
         raise ValueError(f"Expense with ID:{id} not found")
 
     def set_budget_for_a_month(self, month: str, budget: int):
-        try: 
-            for month in self._database["monthly_budgets"]:
-                if month["name"] == month:
-                    if month["budget"] != budget:
-                        month["budget"] = budget
-                        print(f"The monthly budget of {month} has been updated to {budget}$")
+        try:
+            with self._lock:
+                month_data = next((m for m in self.database["monthly_budgets"] if m["name"] == month), None)
+                if month_data and month_data["budget"] != budget:
+                    month_data["budget"] = budget
+                    print(f"The monthly budget of {month} has been updated to {budget}$")
+                    self.database_maker.update_an_existing_db(self.database)
         except ValueError as e: 
             print(e)
-
-        self._database_maker.update_an_existing_db(self._database)
         
-
-    def is_budget_exceeded(self, budget: int) -> bool:
-        pass
-
     def summary_expenses(self, data, filter="all"):
-        expenses = self._database.get("expenses", [])
+        expenses = self.database.get("expenses", [])
 
         if not expenses:
             print("No expenses available.")
             return
 
-        if filter == "all":
-            filtered_expenses = expenses 
-        else: 
-            filtered_expenses = [expense for expense in expenses if expense.get(filter) == data]
+        filtered_expenses = expenses if filter == "all" else [expense for expense in expenses if expense.get(filter) == data]
         
         if not filtered_expenses:
             print(f"The expenses cannot be summarized by {filter}" if filter else "No expenses available.")
             return
 
-        sum_of_expenses = 0
-        for expense in filtered_expenses:
-            sum_of_expenses += expense["amount"]
+        sum_of_expenses = sum(expense["amount"] for expense in filtered_expenses)
         
         print(f"The sum of expenses for the given filter: {filter} is {sum_of_expenses}$")
 
     def export_expenses(self, type: str):
         if type == "csv":
-            with open(DB_FILE_PATH) as json_file:
-                json_data = json.load(json_file)
-            data_file = open(CSV_FILE_PATH, 'w', newline='')
-            csv_writer = csv.writer(data_file)
-            count = 0
-            for data in json_data:
-                if count == 0:
-                    header = data.keys()
-                    csv_writer.writerow(header)
-                    count += 1
-                csv_writer.writerow(data.values())
+            try:
+                with open(DB_FILE_PATH) as json_file:
+                    json_data = json.load(json_file)
+                with open(CSV_FILE_PATH, 'w', newline='') as data_file:
+                    csv_writer = csv.writer(data_file)
+                    count = 0
+                    for data in json_data["expenses"]:
+                        if count == 0:
+                            header = data.keys()
+                            csv_writer.writerow(header)
+                            count += 1
+                        csv_writer.writerow(data.values())
 
-            data_file.close()
-            print(f"The expense database has been exported to a CSV to {CSV_FILE_PATH}")
+                print(f"The expense database has been exported to a CSV to {CSV_FILE_PATH}")
+            except Exception as e:
+                print(f"An error occurred while exporting to CSV: {e}")
         else:
             print("Invalid file type. Only CSV is supported for now.")
 
-    def list_expenses(self, filter=None):
-        expenses = self._database.get("expenses", [])
+    def list_expenses(self, filter=None, filter_value=None):
+        expenses = self.database.get("expenses", [])
         if not expenses:
             print("No expenses available.")
             return
 
-        if filter is None: 
-            filtered_expenses = expenses 
-        else: 
-            filtered_expenses = [expense for expense in expenses if expense.get(filter)]
-        
+        # Filtering logic
+        if filter is None:
+            filtered_expenses = expenses
+        elif filter == "category":
+            filtered_expenses = [expense for expense in expenses if expense["category"].lower() == filter_value.lower()]
+        elif filter == "month":
+            month_id = [budget["id"] for budget in self.database.get("monthly_budgets", []) if budget["name"] == filter_value]
+            filtered_expenses = [expense for expense in expenses if expense["month"] == month_id[0]]
+        else:
+            filtered_expenses = []
+
         if not filtered_expenses:
-            print(f"The expenses cannot be filtered by {filter}" if filter else "No expenses available.")
+            print(f"No expenses found for the given filter: {filter} with value: {filter_value}")
             return
 
         self.tablify(filtered_expenses)
+
     
     def tablify(self, data):
         table = PrettyTable()
-        table.field_names = ["id", "description", "amount", "category", "createdAt"]
+        table.field_names = ["id", "description", "amount", "category", "created_at"]
 
-        if len(data) > 1:
-            for expense in data:
-                table.add_row([int(expense["id"]), str(expense["description"]), int(expense["amount"]), str(expense["category"]),  str(expense["createdAt"])])
-        else:
-            table.add_row([int(expense["id"]), str(expense["description"]), int(expense["amount"]), str(expense["category"]),  str(expense["createdAt"])])
+        for expense in data:
+            table.add_row([expense["id"], expense["description"], expense["amount"], expense["category"], expense["created_at"]])
 
         print(table)
